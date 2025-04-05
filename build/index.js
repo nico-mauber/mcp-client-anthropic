@@ -3,10 +3,12 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import readline from "readline/promises";
 import dotenv from "dotenv";
+import { AggregatorClient } from "./aggregator.js";
 dotenv.config();
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-if (!ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not set");
+import path from 'path';
+const key = "";
+if (!key) {
+    throw new Error("key is not set");
 }
 class MCPClient {
     mcp;
@@ -15,7 +17,7 @@ class MCPClient {
     tools = [];
     constructor() {
         this.anthropic = new Anthropic({
-            apiKey: ANTHROPIC_API_KEY,
+            apiKey: key,
         });
         this.mcp = new Client({ name: "mcp-client-cli", version: "1.0.0" });
     }
@@ -105,6 +107,7 @@ class MCPClient {
             input: process.stdin,
             output: process.stdout,
         });
+        debugger;
         try {
             console.log("\nMCP Client Started!");
             console.log("Type your queries or 'quit' to exit.");
@@ -125,19 +128,39 @@ class MCPClient {
         await this.mcp.close();
     }
 }
+//async function main() {
+//  if (process.argv.length < 3) {
+//    console.log("Usage: node index.ts <path_to_server_script>");
+//    return;
+//  }
+//  const mcpClient = new MCPClient();
+//  try {
+//    await mcpClient.connectToServer(process.argv[2]); //process.argv[2] es el path del script del servidor
+//    await mcpClient.chatLoop();
+//  } finally {
+//    await mcpClient.cleanup();
+//    process.exit(0);
+//  }
+//}
+//
+//main();
 async function main() {
-    if (process.argv.length < 3) {
-        console.log("Usage: node index.ts <path_to_server_script>");
-        return;
-    }
-    const mcpClient = new MCPClient();
+    // Ajusta las rutas a tus archivos de servidor
+    const weatherServerPath = path.resolve("servers/weather.js");
+    const dictionaryServerPath = path.resolve("servers/spanish-dictionary.js");
+    const aggregator = new AggregatorClient();
     try {
-        await mcpClient.connectToServer(process.argv[2]);
-        await mcpClient.chatLoop();
+        // Iniciamos ambos servidores
+        await aggregator.startAllServers(weatherServerPath, dictionaryServerPath);
+        // Entramos en el loop interactivo
+        await aggregator.chatLoop();
     }
     finally {
-        await mcpClient.cleanup();
+        await aggregator.cleanup();
         process.exit(0);
     }
 }
-main();
+main().catch((err) => {
+    console.error("Error en main():", err);
+    process.exit(1);
+});
