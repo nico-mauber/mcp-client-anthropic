@@ -7,10 +7,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import readline from "readline/promises";
 import dotenv from "dotenv";
+import path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve("build", ".env") });
 
-const key = "";
+const key = process.env.ANTHROPIC_API_KEY;
 if (!key) {
   throw new Error("key is not set");
 }

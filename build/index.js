@@ -4,9 +4,9 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import readline from "readline/promises";
 import dotenv from "dotenv";
 import { AggregatorClient } from "./aggregator.js";
-dotenv.config();
+dotenv.config({ path: path.resolve("build", ".env") });
 import path from 'path';
-const key = "";
+const key = process.env.ANTHROPIC_API_KEY;
 if (!key) {
     throw new Error("key is not set");
 }
