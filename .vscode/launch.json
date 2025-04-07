@@ -10,8 +10,8 @@
             "name": "Run Build/index.js",
             "request": "launch",
             "program": "C:\\Users\\nmauber\\Documents\\mcp-client-typescript\\build\\index.js",
-            "console": "integratedTerminal"
-
+            "console": "integratedTerminal",
+            "sourceMaps": true
         }
     ]
 }

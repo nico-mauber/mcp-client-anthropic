@@ -8,12 +8,18 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import readline from "readline/promises";
 import dotenv from "dotenv";
 import path from "path";
+import OpenAI from "openai";
+import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs";
 
 dotenv.config({ path: path.resolve("build", ".env") });
 
-const key = process.env.ANTHROPIC_API_KEY;
-if (!key) {
-  throw new Error("key is not set");
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+if (!ANTHROPIC_API_KEY) {
+  throw new Error("ANTHROPIC_API_KEY is not set");
+}
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is not set");
 }
 
 // Estructura para mantener la información de un servidor MCP
@@ -23,14 +29,14 @@ interface McpServerConnection {
 }
 
 export class AggregatorClient {
-  private anthropic: Anthropic;
+  private openAI: OpenAI;
   private weatherServer: McpServerConnection | null = null;
   private dictionaryServer: McpServerConnection | null = null;
   private allTools: Tool[] = [];
 
   constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: key,
+    this.openAI = new OpenAI({
+      apiKey: OPENAI_API_KEY,
     });
   }
 
@@ -39,8 +45,14 @@ export class AggregatorClient {
    * @param serverScriptPath Path del archivo del servidor (por ej: weather.js, spanish-dictionary.js)
    * @param serverKey Identificador interno (ej: "weather" o "dictionary")
    */
-  private async startSingleServer(serverScriptPath: string, serverKey: "weather" | "dictionary") {
-    const client = new Client({ name: `mcp-${serverKey}-client`, version: "1.0.0" });
+  private async startSingleServer(
+    serverScriptPath: string,
+    serverKey: "weather" | "dictionary"
+  ) {
+    const client = new Client({
+      name: `mcp-${serverKey}-client`,
+      version: "1.0.0",
+    });
 
     // Determina el comando a usar
     const isJs = serverScriptPath.endsWith(".js");
@@ -71,12 +83,15 @@ export class AggregatorClient {
       input_schema: tool.inputSchema,
     })) as Tool[];
 
-    console.log(`Conectado a ${serverKey} con tools:`, tools.map(({ name }) => name));
+    console.log(
+      `Conectado a ${serverKey} con tools:`,
+      tools.map(({ name }) => name)
+    );
 
     // Guarda la conexión
     const connection: McpServerConnection = {
       client,
-      toolNames: new Set(tools.map(t => t.name)),
+      toolNames: new Set(tools.map((t) => t.name)),
     };
 
     // Dependiendo del serverKey, guardamos en la variable adecuada
@@ -103,75 +118,107 @@ export class AggregatorClient {
    */
   public async processQuery(query: string) {
     // Mensaje del usuario
-    const messages: MessageParam[] = [
+    const messages: ChatCompletionMessageParam[] = [
       {
         role: "user",
         content: query,
       },
     ];
 
-    // Llamamos a Anthropic con la lista combinada de herramientas
-    const response = await this.anthropic.messages.create({
-      model: "claude-3-7-sonnet-20250219",
+    // Llamamos a OpenAI con la lista combinada de herramientas
+    const response = await this.openAI.chat.completions.create({
+      model: "gpt-3.5-turbo-0125",
       max_tokens: 1000,
       messages,
-      tools: this.allTools
-    }, 
-      {headers: {
-        "anthropic-beta": "token-efficient-tools-2025-02-19"
-      }}
-    );
+      tools: this.allTools.map((tool) => ({
+        type: "function" as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.input_schema,
+        },
+      })),
+    });
 
     const finalText = [];
-    debugger;
+
     // Revisamos si el modelo quiere usar alguna herramienta
-    for (const content of response.content) {
-      if (content.type === "text") {
-        finalText.push(content.text);
-      } else if (content.type === "tool_use") {
-        // Identificamos qué herramienta desea usar
-        const toolName = content.name;
-        const toolArgs = content.input as { [x: string]: unknown } | undefined;
+    if (
+      response.choices &&
+      response.choices.length > 0 &&
+      response.choices[0].message.tool_calls
+    ) {
+      const toolCalls = response.choices[0].message.tool_calls;
 
-        // Decidimos a qué servidor dirigir la llamada
-        let serverClienteToUse: Client | null = null;
-        if (this.weatherServer?.toolNames.has(toolName)) {
-          serverClienteToUse = this.weatherServer.client;
-        } else if (this.dictionaryServer?.toolNames.has(toolName)) {
-          serverClienteToUse = this.dictionaryServer.client;
-        } else {
-          // Si no coincide con ninguno, devolvemos error
-          finalText.push(`No server found for tool ${toolName}`);
-          continue;
-        }
+      for (const toolCall of toolCalls) {
+        if (toolCall.type === "function") {
+          // Identificamos qué herramienta desea usar
+          const toolName = toolCall.function.name;
+          const toolArgs = JSON.parse(toolCall.function.arguments);
 
-        // Llamamos a la herramienta en el servidor correspondiente
-        const result = await serverClienteToUse.callTool({
-          name: toolName,
-          arguments: toolArgs,
-        });
+          // Decidimos a qué servidor dirigir la llamada
+          let serverClienteToUse: Client | null = null;
+          if (this.weatherServer?.toolNames.has(toolName)) {
+            serverClienteToUse = this.weatherServer.client;
+          } else if (this.dictionaryServer?.toolNames.has(toolName)) {
+            serverClienteToUse = this.dictionaryServer.client;
+          } else {
+            // Si no coincide con ninguno, devolvemos error
+            finalText.push(`No server found for tool ${toolName}`);
+            continue;
+          }
 
-        finalText.push(
-          `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`
-        );
+          // Llamamos a la herramienta en el servidor correspondiente
+          const result = await serverClienteToUse.callTool({
+            name: toolName,
+            arguments: toolArgs,
+          });
 
-        // Incorporamos la respuesta del servidor como si fuera un "mensaje" para el modelo
-        messages.push({
-          role: "user",
-          content: result.content as string,
-        });
+          //Yo como LLM pedi que llamen a esta tool con ciertos parametros -  ES UN LOG
+          messages.push({
+            role: "assistant",//Es la respuesta del LLM diciendo que tool ejecutar y con que parametros
+            content: null,
+            tool_calls: [
+              {
+                type: "function",
+                id: toolCall.id,
+                function: {
+                  name: toolName,
+                  arguments: JSON.stringify(toolArgs),
+                },
+              },
+            ],
+          });
 
-        // Pedimos al modelo que genere una respuesta final, usando la info del servidor
-        const followUp = await this.anthropic.messages.create({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 1000,
-          messages,
-        });
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: result.content as string,
+          });
 
-        if (followUp.content.length > 0 && followUp.content[0].type === "text") {
-          finalText.push(followUp.content[0].text);
+          // Pedimos al modelo que genere una respuesta final, usando la info del servidor
         }
       }
+
+      const followUp = await this.openAI.chat.completions.create({
+        model: "gpt-4",
+        max_tokens: 1000,
+        messages,
+      });
+
+      if (
+        followUp.choices &&
+        followUp.choices.length > 0 &&
+        followUp.choices[0].message.content
+      ) {
+        finalText.push(followUp.choices[0].message.content);
+      }
+    } else if (
+      response.choices &&
+      response.choices.length > 0 &&
+      response.choices[0].message.content
+    ) {
+      finalText.push(response.choices[0].message.content);
     }
 
     return finalText.join("\n");
@@ -198,11 +245,9 @@ export class AggregatorClient {
         const response = await this.processQuery(message);
         console.log("\n" + response);
       }
-    } 
-    catch (error) {
+    } catch (error) {
       console.error("Error en el bucle de lectura:", error);
-    }
-    finally {
+    } finally {
       rl.close();
     }
   }
@@ -219,4 +264,3 @@ export class AggregatorClient {
     }
   }
 }
-

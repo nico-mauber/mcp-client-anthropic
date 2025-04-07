@@ -8,7 +8,7 @@ const dictionary = {
     "queso": "Producto lácteo obtenido a partir de la coagulación de la leche.",
     "computadora": "Máquina electrónica diseñada para el procesamiento de datos.",
     "saltar": "Acción de elevarse del suelo o impulsarse en el aire.",
-    "billetara": "Objeto similar a una billetera, utilizado para guardar billetes y tarjetas.",
+    "billetera": "Objeto similar a una billetera, utilizado para guardar billetes y tarjetas.",
     "desayuno": "Primera comida del día, generalmente consumida en la mañana."
 };
 
