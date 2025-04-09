@@ -1,201 +1,94 @@
-import { Anthropic } from "@anthropic-ai/sdk";
-import {
-  MessageParam,
-  Tool,
-} from "@anthropic-ai/sdk/resources/messages/messages.mjs";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import readline from "readline/promises";
-import dotenv from "dotenv";
-import { AggregatorClient } from "./aggregator.js";
+import express, { Request, Response, RequestHandler } from 'express'; // Añade RequestHandler
+import dotenv from 'dotenv';
 import path from 'path';
+import { AggregatorClient } from './aggregator.js';
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'build', '.env') });
 
 
-// const key = process.env.ANTHROPIC_API_KEY;
-// if (!key) {
-//   throw new Error("key is not set");
-// }
-
-// class MCPClient {
-//   private mcp: Client;
-//   private anthropic: Anthropic;
-//   private transport: StdioClientTransport | null = null;
-//   private tools: Tool[] = [];
-
-//   constructor() {
-//     this.anthropic = new Anthropic({
-//       apiKey: key,
-//     });
-//     this.mcp = new Client({ name: "mcp-client-cli", version: "1.0.0" });
-//   }
-
-//   async connectToServer(serverScriptPath: string) {
-//     try {
-//       const isJs = serverScriptPath.endsWith(".js");
-//       const isPy = serverScriptPath.endsWith(".py");
-//       if (!isJs && !isPy) {
-//         throw new Error("Server script must be a .js or .py file");
-//       }
-//       const command = isPy
-//         ? process.platform === "win32"
-//           ? "python"
-//           : "python3"
-//         : process.execPath;
-      
-//       this.transport = new StdioClientTransport({
-//         command,
-//         args: [serverScriptPath],
-//       });
-//       this.mcp.connect(this.transport);
-      
-//       const toolsResult = await this.mcp.listTools();
-
-//       this.tools = toolsResult.tools.map((tool) => {
-//         return {
-//           name: tool.name,
-//           description: tool.description,
-//           input_schema: tool.inputSchema,
-//         };
-//       }) as Tool[];
-
-//       console.log(
-//         "Connected to server with tools:",
-//         this.tools.map(({ name }) => name)
-//       );
-//     } catch (e) {
-//       console.log("Failed to connect to MCP server: ", e);
-//       throw e;
-//     }
-//   }
-
-//   //Function calling
-//   async processQuery(query: string) {
-//     const messages: MessageParam[] = [
-//       {
-//         role: "user", //rol puede ser user, assistant, tool o system
-//         //system es para darle instrucciones al modelo, crear una personalidad
-//         //assistant es para darle una respuesta y mantener un contexto de la conversacion
-//         //tool es para llamar a una funcion
-//         //user es para darle una pregunta al modelo siendo el usuario
-//         content: query,
-//       },
-//     ];
-  
-//     const response = await this.anthropic.messages.create({
-//       model: "claude-3-5-sonnet-20241022",
-//       max_tokens: 1000,
-//       messages,
-//       tools: this.tools,
-//     });
-  
-//     const finalText = [];
-//     const toolResults = [];
-  
-//     for (const content of response.content) {
-//       if (content.type === "text") {
-//         finalText.push(content.text);
-//       } else if (content.type === "tool_use") {
-//         const toolName = content.name;
-//         const toolArgs = content.input as { [x: string]: unknown } | undefined;
-  
-//         const result = await this.mcp.callTool({
-//           name: toolName,
-//           arguments: toolArgs,
-//         });
-//         toolResults.push(result);
-//         finalText.push(
-//           `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`
-//         );
-  
-//         messages.push({
-//           role: "user",
-//           content: result.content as string,
-//         });
-  
-//         //Dado la query del ususario y el resultado de la tool, devolmveme un resultado amigable para el usuario
-//         const response = await this.anthropic.messages.create({
-//           model: "claude-3-5-sonnet-20241022",
-//           max_tokens: 1000,
-//           messages,//tiene la query del user y el resultado de la tool
-//         });
-  
-//         finalText.push(
-//           response.content[0].type === "text" ? response.content[0].text : ""
-//         );
-//       }
-//     }
-  
-//     return finalText.join("\n");
-//   }
-
-//   async chatLoop() {
-//     const rl = readline.createInterface({
-//       input: process.stdin,
-//       output: process.stdout,
-//     });
-//     debugger;
-//     try {
-//       console.log("\nMCP Client Started!");
-//       console.log("Type your queries or 'quit' to exit.");
-  
-//       while (true) {
-//         const message = await rl.question("\nQuery: ");
-//         if (message.toLowerCase() === "quit") {
-//           break;
-//         }
-//         const response = await this.processQuery(message);
-//         console.log("\n" + response);
-//       }
-//     } finally {
-//       rl.close();
-//     }
-//   }
-  
-//   async cleanup() {
-//     await this.mcp.close();
-//   }
-
-
-// }
-
-//async function main() {
-//  if (process.argv.length < 3) {
-//    console.log("Usage: node index.ts <path_to_server_script>");
-//    return;
-//  }
-//  const mcpClient = new MCPClient();
-//  try {
-//    await mcpClient.connectToServer(process.argv[2]); //process.argv[2] es el path del script del servidor
-//    await mcpClient.chatLoop();
-//  } finally {
-//    await mcpClient.cleanup();
-//    process.exit(0);
-//  }
-//}
-//
-//main();
-
-
-async function main() {
-  // Ajusta las rutas a tus archivos de servidor
+async function startServer() {
   const weatherServerPath = path.resolve("servers/weather.js");
   const dictionaryServerPath = path.resolve("servers/spanish-dictionary.js");
-
   const aggregator = new AggregatorClient();
+
   try {
-    // Iniciamos ambos servidores
+    console.log("Iniciando servidores MCP (Weather y Dictionary)...");
     await aggregator.startAllServers(weatherServerPath, dictionaryServerPath);
-    // Entramos en el loop interactivo
-    await aggregator.chatLoop();
-  } finally {
-    await aggregator.cleanup();
-    process.exit(0);
+    console.log("Servidores MCP iniciados correctamente.");
+
+    const app = express();
+    const PORT = process.env.PORT || 3000;
+    app.use(express.json());
+
+    // --- Define el handler con tipo explícito ---
+    const queryHandler  : RequestHandler = async (req: Request, res: Response) => {
+      try {
+        const userQuery = req.body.query;
+
+        if (!userQuery || typeof userQuery !== 'string' || userQuery.trim() === '') {
+          console.log("Petición recibida sin query válida.");
+          // Usar 'return' aquí para asegurar que no se ejecute más código después de enviar la respuesta
+          return res.status(400).json({ error: 'Se requiere un campo "query" (string) en el cuerpo de la petición.' });
+        }
+
+        console.log(`Recibida query: "${userQuery}"`);
+        const responseText = await aggregator.processQuery(userQuery);
+        console.log(`Respuesta generada: "${responseText}"`);
+
+        // Enviar respuesta exitosa
+        res.status(200).json({ response: responseText });
+
+      } catch (error: any) {
+        console.error("Error procesando la query:", error);
+        // Asegurarse de no enviar otra respuesta si ya se envió una (aunque en este flujo es improbable)
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Error interno del servidor al procesar la consulta.', details: error.message });
+        }
+      }
+    };
+
+    // --- Usa el handler tipado ---
+    app.post('/api/query', queryHandler as RequestHandler); // Ahora pasas la variable que contiene la función tipada
+
+    app.get('/', (req: Request, res: Response) => { // También puedes tipar este handler si quieres ser consistente
+      res.send('Servidor Aggregator API está corriendo!');
+    });
+
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Servidor Express escuchando en http://localhost:${PORT}`);
+      console.log(`   Endpoint disponible en POST http://localhost:${PORT}/api/query`);
+    });
+
+    const shutdown = async (signal: string) => {
+      console.log(`\nRecibida señal ${signal}. Cerrando conexiones...`);
+      server.close(async () => {
+        console.log('Servidor HTTP cerrado.');
+        try {
+          await aggregator.cleanup();
+          console.log('Conexiones MCP cerradas limpiamente.');
+          process.exit(0);
+        } catch (cleanupError) {
+          console.error('Error durante la limpieza de MCP:', cleanupError);
+          process.exit(1);
+        }
+      });
+      setTimeout(() => {
+        console.error('No se pudo cerrar limpiamente, forzando cierre.');
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
+  } catch (err) {
+    console.error("Error crítico durante la inicialización:", err);
+    if (aggregator) {
+        try { await aggregator.cleanup(); } catch (cleanupErr) { /* Ignora error secundario */ }
+    }
+    process.exit(1);
   }
 }
 
-main().catch((err) => {
-  console.error("Error en main():", err);
-  process.exit(1);
-});
-
-
+startServer();

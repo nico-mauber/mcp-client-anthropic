@@ -1,12 +1,12 @@
 {
   "name": "mcp-client-typescript",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "API para MCP Client",
+  "main": "build/index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc"
+    "start": "node build/index.js",
+    "dev": "nodemon build/index.js"
   },
   "keywords": [],
   "author": "",
@@ -14,11 +14,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@modelcontextprotocol/sdk": "^1.8.0",
-    "dotenv": "^16.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
     "openai": "^4.91.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "nodemon": "^2.0.22",
     "typescript": "^5.8.3"
   }
 }
