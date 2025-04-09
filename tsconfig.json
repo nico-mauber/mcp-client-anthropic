@@ -4,7 +4,7 @@
       "module": "Node16",
       "moduleResolution": "Node16",
       "outDir": "./build",
-      "rootDir": "./",
+      "rootDir": "./src",
       "strict": false,
       "esModuleInterop": true,
       "skipLibCheck": true,
@@ -12,6 +12,7 @@
       "allowJs": true,
       "allowSyntheticDefaultImports": true
     },
-    "include": ["index.ts"],
+    "include": ["src/**/*.ts"],
+    "files": ["src/index.ts"],
     "exclude": ["node_modules"]
   }

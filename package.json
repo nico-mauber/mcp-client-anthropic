@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node build/index.js",
-    "dev": "nodemon build/index.js"
+    "dev": "nodemon build/index.js",
+    "build": "tsc",
+    "build:watch": "tsc --watch"
   },
   "keywords": [],
   "author": "",
